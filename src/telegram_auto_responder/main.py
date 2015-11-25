@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import datetime
+import socket
 import logging
 import os
 import pprint  # noqa
@@ -11,6 +12,7 @@ import time
 from pytg.utils import coroutine
 from pytg.receiver import Receiver
 from pytg.sender import Sender
+from pytg.exceptions import ConnectionError
 
 from storage import Storage
 
@@ -62,6 +64,18 @@ def connect():
     log.debug('< connected')
 
     return
+
+
+def with_connection(f):
+    def w(*a, **kw):
+        while True:
+            try:
+                return f(*a, **kw)
+            except (socket.gaierror, ConnectionError):
+                time.sleep(1)
+                connect()
+
+    return w
 
 
 def is_forward_user(o):
@@ -289,21 +303,21 @@ def handle_messages(*a, **kw):
 
 
 def run():
-    connect()
+    with_connection(connect)()
 
     DATA['me'] = SENDER.get_self()
 
-    contacts_list_thread = threading.Thread(name="contacts", target=update_contact_list, args=())
+    contacts_list_thread = threading.Thread(name="contacts", target=with_connection(update_contact_list), args=())
     contacts_list_thread.daemon = True
     contacts_list_thread.start()
 
-    dialog_list_thread = threading.Thread(name="dialogs", target=update_dialog_list, args=())
+    dialog_list_thread = threading.Thread(name="dialogs", target=with_connection(update_dialog_list), args=())
     dialog_list_thread.daemon = True
     dialog_list_thread.start()
 
-    watch_dialogs_thread = threading.Thread(name="watch dialog", target=watch_dialogs, args=())
+    watch_dialogs_thread = threading.Thread(name="watch dialog", target=with_connection(watch_dialogs), args=())
     watch_dialogs_thread.daemon = True
     watch_dialogs_thread.start()
 
     RECEIVER.start()  # start the Connector.
-    RECEIVER.message(handle_messages(RECEIVER))
+    RECEIVER.message(with_connection(handle_messages)(RECEIVER))
