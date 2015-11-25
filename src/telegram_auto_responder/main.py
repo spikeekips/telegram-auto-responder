@@ -65,6 +65,9 @@ def connect():
 
 
 def is_forward_user(o):
+    if o.get('username') in _TB_FORWARD_USERS:
+        return True
+
     if o.get('print_name') in _TB_FORWARD_USERS:
         return True
 
